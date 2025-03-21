@@ -1,0 +1,16 @@
+{
+  "name": "bilibili-video-downloader",
+  "version": "1.0.0",
+  "description": "一个简单的B站视频下载器",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ytdl-core": "^4.11.5",
+    "progress": "^2.0.3",
+    "axios": "^1.6.2",
+    "bili-api": "^1.10.1"
+  }
+}
