@@ -31,15 +31,28 @@ async function getVideoUrl(bvid, cid) {
 async function getCollectionInfo(bvid) {
     try {
         const videoInfo = await getBilibiliVideoInfo(bvid);
-        if (!videoInfo.ugc_season) {
-            return null;
+        // 检查是否为分P视频
+        if (videoInfo.pages && videoInfo.pages.length > 1) {
+            return {
+                title: videoInfo.title,
+                episodes: videoInfo.pages.map(page => ({
+                    title: page.part,
+                    bvid: bvid,
+                    cid: page.cid,
+                    page: page.page
+                }))
+            };
         }
-        return {
-            title: videoInfo.ugc_season.title,
-            episodes: videoInfo.ugc_season.sections[0].episodes
-        };
+        // 检查是否为合集
+        if (videoInfo.ugc_season) {
+            return {
+                title: videoInfo.ugc_season.title,
+                episodes: videoInfo.ugc_season.sections[0].episodes
+            };
+        }
+        return null;
     } catch (error) {
-        throw new Error('获取合集信息失败');
+        throw new Error('获取视频信息失败');
     }
 }
 
@@ -59,7 +72,10 @@ function sanitizeFileName(fileName) {
         .trim();                        // 移除首尾空格
 }
 
-async function downloadSingleVideo(url, targetDir = '.') {
+// 添加全局下载目录变量
+let globalDownloadDir = '.';
+
+async function downloadSingleVideo(url, targetDir = globalDownloadDir, pageNumber = 1) {
     try {
         const bvid = url.match(/BV[a-zA-Z0-9]+/)?.[0];
         if (!bvid) {
@@ -68,11 +84,23 @@ async function downloadSingleVideo(url, targetDir = '.') {
 
         console.log('正在获取视频信息...');
         const videoInfo = await getBilibiliVideoInfo(bvid);
-        const videoTitle = sanitizeFileName(videoInfo.title); // 使用新的文件名处理函数
-        const fileName = path.join(targetDir, `${videoTitle}.mp4`);
+        
+        // 获取指定分P的CID
+        const cid = pageNumber > 1 && videoInfo.pages ? 
+            videoInfo.pages.find(p => p.page === pageNumber)?.cid : 
+            videoInfo.cid;
+        
+        if (!cid) {
+            throw new Error('无法获取视频CID');
+        }
 
-        console.log(`找到视频: ${videoTitle}`);
-        const videoUrl = await getVideoUrl(bvid, videoInfo.cid);
+        const videoTitle = sanitizeFileName(videoInfo.title);
+        const partTitle = pageNumber > 1 ? 
+            `${videoTitle}_P${pageNumber}` : videoTitle;
+        const fileName = path.join(targetDir, `${partTitle}.mp4`);
+
+        console.log(`找到视频: ${partTitle}`);
+        const videoUrl = await getVideoUrl(bvid, cid);
 
         // 设置下载请求头
         const headers = {
@@ -122,26 +150,31 @@ async function downloadCollection(url) {
         const collectionInfo = await getCollectionInfo(bvid);
         
         if (!collectionInfo) {
-            console.log('未找到合集信息，将作为单个视频下载...');
+            console.log('未找到分P或合集信息，将作为单个视频下载...');
             return await downloadSingleVideo(url);
         }
 
-        const dirName = sanitizeFileName(collectionInfo.title); // 使用新的文件名处理函数
-        const targetDir = await ensureDir(dirName);
+        const dirName = sanitizeFileName(collectionInfo.title);
+        const targetDir = await ensureDir(path.join(globalDownloadDir, dirName));
         
-        console.log(`找到合集: ${collectionInfo.title}`);
+        console.log(`找到${collectionInfo.episodes.length > 1 ? '分P视频' : '合集'}: ${collectionInfo.title}`);
         console.log(`共${collectionInfo.episodes.length}个视频`);
 
         for (let i = 0; i < collectionInfo.episodes.length; i++) {
             const episode = collectionInfo.episodes[i];
-            // 保留原始标题
             console.log(`\n[${i + 1}/${collectionInfo.episodes.length}] 下载: ${episode.title}`);
-            await downloadSingleVideo(`https://www.bilibili.com/video/${episode.bvid}`, targetDir);
+            if (episode.page) {
+                // 下载分P视频
+                await downloadSingleVideo(`https://www.bilibili.com/video/${episode.bvid}`, targetDir, episode.page);
+            } else {
+                // 下载合集视频
+                await downloadSingleVideo(`https://www.bilibili.com/video/${episode.bvid}`, targetDir);
+            }
         }
 
-        console.log('\n合集下载完成！保存在文件夹:', dirName);
+        console.log('\n全部下载完成！保存在文件夹:', dirName);
     } catch (error) {
-        console.error('下载合集失败:', error.message);
+        console.error('下载失败:', error.message);
     }
 }
 
@@ -169,11 +202,29 @@ async function handleUserChoice(url) {
     });
 }
 
+// 添加询问下载目录的函数
+async function askDownloadDirectory() {
+    return new Promise((resolve) => {
+        rl.question('请输入下载目录 (直接回车使用当前目录): ', async (dir) => {
+            if (dir.trim()) {
+                const fullPath = path.resolve(dir);
+                await ensureDir(fullPath);
+                globalDownloadDir = fullPath;
+                console.log(`下载目录已设置为: ${fullPath}`);
+            } else {
+                console.log('将使用当前目录作为下载目录');
+            }
+            resolve();
+        });
+    });
+}
+
 // 修改启动程序部分
 console.log('请输入B站视频URL:');
 rl.on('line', async (url) => {
     if (url.includes('bilibili.com/')) {
         try {
+            await askDownloadDirectory();
             await handleUserChoice(url);
         } catch (error) {
             console.error('处理失败:', error.message);

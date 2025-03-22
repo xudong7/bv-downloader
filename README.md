@@ -1,15 +1,19 @@
 # BV Downloader
 
-A command-line tool for downloading videos from Bilibili using BV numbers.
+[English](README.md) | [简体中文](README_zh.md)
+
+A command-line tool for downloading videos from Bilibili using BV numbers or video URLs.
 
 ## Features
 
-- Download videos from Bilibili using BV numbers
-- Support for parsing video quality
-- Video metadata fetching
-- Progress bar display during download
-- Multi-thread downloading support
-- Smart retry mechanism
+- Download videos via Bilibili video URL or BV number
+- Support for single video or collection download
+- Custom download directory selection
+- Batch download for multi-part videos
+- Video metadata fetching and display
+- Real-time progress bar
+- Auto-creation of collection directories
+- Smart filename handling
 
 ## Prerequisites
 
@@ -31,11 +35,39 @@ npm install
 
 ## Usage
 
+1. Start the program:
 ```bash
 npm start
 ```
 
-input the url and choose download way
+2. Input video URL:
+- Supports full Bilibili video URLs
+- Example: https://www.bilibili.com/video/BV1xx411c7mD
+
+3. Set download directory:
+- Specify a custom download directory
+- Press Enter to use current directory
+
+4. Choose download mode:
+- Option 1: Download single video
+- Option 2: Download entire collection (if available)
+
+## Notes
+
+- Ensure sufficient disk space
+- Maintain internet connection during download
+- Videos are downloaded in original quality
+- Collections will be saved in dedicated folders
+
+## Disclaimer
+
+This tool is for personal learning and research purposes only. The author assumes no responsibility for any consequences resulting from the use of this tool. Users should:
+
+- Use this tool in compliance with relevant laws and regulations
+- Respect copyright and intellectual property rights
+- Bear all risks and responsibilities arising from the use of this tool
+- Not use this tool for any commercial purposes
+- Not use this tool to download unauthorized content
 
 ## License
 
