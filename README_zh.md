@@ -4,6 +4,10 @@
 
 一个用于下载B站视频的命令行工具，支持BV号或视频URL下载。
 
+## 使用演示
+
+![display](./assets/display.gif)
+
 ## 功能特性
 
 - 支持通过B站视频URL或BV号下载视频

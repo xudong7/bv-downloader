@@ -4,6 +4,10 @@
 
 A command-line tool for downloading videos from Bilibili using BV numbers or video URLs.
 
+## display
+
+![display](./assets/display.gif)
+
 ## Features
 
 - Download videos via Bilibili video URL or BV number
