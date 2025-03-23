@@ -70,7 +70,7 @@ class BilibiliAPI {
             }
 
             const mediaListResponse = await axios.get(apiUrl, { headers: this.headers });
-            
+
             if (mediaListResponse.data.code !== 0) {
                 throw new Error(mediaListResponse.data.message || '获取收藏夹失败');
             }
@@ -92,9 +92,9 @@ class BilibiliAPI {
             const totalCount = info.media_count;
             const pageSize = 20;
             const totalPages = Math.ceil(totalCount / pageSize);
-            
+
             console.log(`收藏夹共有 ${totalCount} 个视频，开始获取所有视频信息...`);
-            
+
             const allVideos = [];
             for (let page = 1; page <= totalPages; page++) {
                 console.log(`正在获取第 ${page}/${totalPages} 页...`);
@@ -104,7 +104,7 @@ class BilibiliAPI {
                         : `https://api.bilibili.com/x/v3/fav/resource/list?media_id=${fid}&pn=${page}&ps=${pageSize}`,
                     { headers: this.headers }
                 );
-                
+
                 if (response.data.code === 0) {
                     const medias = type === 'collected'
                         ? response.data.data.medias
@@ -114,7 +114,7 @@ class BilibiliAPI {
                         allVideos.push(...medias);
                     }
                 }
-                
+
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
 
@@ -123,7 +123,7 @@ class BilibiliAPI {
             }
 
             console.log(`成功获取到 ${allVideos.length} 个视频信息`);
-            
+
             return {
                 title: info.title,
                 videos: allVideos.map(media => ({

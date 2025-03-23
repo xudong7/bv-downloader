@@ -81,7 +81,7 @@ class VideoDownloader {
                 input: process.stdin,
                 output: process.stdout
             });
-            
+
             tempRl.question(
                 `视频 "${title}" 时长为${durationText}，是否继续下载？(y/n): `,
                 (ans) => {
@@ -99,7 +99,7 @@ class VideoDownloader {
                 input: process.stdin,
                 output: process.stdout
             });
-            
+
             tempRl.question(
                 `是否下载合集 "${collectionInfo.title}" 的所有视频？(y/n): `,
                 (ans) => {
@@ -195,7 +195,7 @@ class VideoDownloader {
         const midMatch = url.match(/space\.bilibili\.com\/(\d+)/);
         const fidMatch = url.match(/fid=(\d+)/);
         const typeMatch = url.match(/ftype=(\w+)/);
-        
+
         if (midMatch && fidMatch) {
             return {
                 mid: midMatch[1],
@@ -214,7 +214,7 @@ class VideoDownloader {
 
         console.log('正在获取收藏夹信息...');
         const favList = await this.api.getFavList(favInfo.mid, favInfo.fid, favInfo.type);
-        
+
         const dirName = this.fileManager.sanitizeFileName(favList.title);
         const targetDir = await this.fileManager.ensureDir(dirName);
 
@@ -244,7 +244,7 @@ class VideoDownloader {
                     // 为合集创建子目录
                     const subDirName = this.fileManager.sanitizeFileName(video.title);
                     const subDir = await this.fileManager.ensureDir(path.join(targetDir, subDirName));
-                    
+
                     console.log(`发现${collectionInfo.episodes.length > 1 ? '分P视频' : '合集'}: ${video.title}`);
                     console.log(`共${collectionInfo.episodes.length}个视频`);
 
@@ -258,7 +258,7 @@ class VideoDownloader {
                     for (let j = 0; j < collectionInfo.episodes.length; j++) {
                         const episode = collectionInfo.episodes[j];
                         console.log(`\n  [${j + 1}/${collectionInfo.episodes.length}] 下载: ${episode.title}`);
-                        
+
                         if (episode.page) {
                             await this.downloadVideo(
                                 `https://www.bilibili.com/video/${episode.bvid}`,
