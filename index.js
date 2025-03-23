@@ -31,6 +31,11 @@ async function askDownloadDirectory() {
 
 // 处理用户选择
 async function handleUserChoice(url) {
+    if (url.includes('space.bilibili.com') && url.includes('favlist')) {
+        await downloader.downloadFavorites(url);
+        return;
+    }
+
     console.log('\n请选择下载模式:');
     console.log('1. 下载单个视频');
     console.log('2. 下载整个合集(如果存在)');
@@ -55,7 +60,7 @@ async function handleUserChoice(url) {
 }
 
 // 主程序入口
-console.log('请输入B站视频URL:');
+console.log('请输入B站视频URL或收藏夹URL:');
 rl.on('line', async (url) => {
     if (url.includes('bilibili.com/')) {
         try {

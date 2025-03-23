@@ -1,11 +1,16 @@
 import ProgressBar from 'progress';
 import axios from 'axios';
 import path from 'path';
+import readline from 'readline';
 
 class VideoDownloader {
     constructor(bilibiliAPI, fileManager) {
         this.api = bilibiliAPI;
         this.fileManager = fileManager;
+        this.rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
     }
 
     setDownloadDir(dir) {
@@ -41,7 +46,7 @@ class VideoDownloader {
             total: parseInt(totalLength)
         });
 
-        const filePath = path.join(targetDir, fileName);
+        const filePath = path.resolve(targetDir, fileName);
         const writer = this.fileManager.createWriteStream(filePath);
 
         return new Promise((resolve, reject) => {
@@ -61,14 +66,46 @@ class VideoDownloader {
         });
     }
 
+    async _askConfirmation(duration, title) {
+        const minutes = Math.floor(duration / 60);
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+
+        const durationText = `${hours}小时${remainingMinutes}分钟`;
+        const answer = await new Promise(resolve => {
+            this.rl.question(
+                `视频 "${title}" 时长为${durationText}，是否继续下载？(y/n): `,
+                resolve
+            );
+        });
+        return answer.toLowerCase() === 'y';
+    }
+
     async downloadVideo(url, targetDir = '.', pageNumber = 1) {
         const bvid = this._extractBvid(url);
         if (!bvid) throw new Error('无效的B站视频链接');
 
         console.log('正在获取视频信息...');
         const videoInfo = await this.api.getVideoInfo(bvid);
-        const cid = this._getCid(videoInfo, pageNumber);
+        const fileName = this._generateFileName(videoInfo, pageNumber);
+        const filePath = path.join(targetDir, fileName);
 
+        // 检查文件是否已存在
+        if (this.fileManager.fileExists(filePath)) {
+            console.log(`文件已存在，跳过下载: ${fileName}`);
+            return filePath;
+        }
+
+        // 检查视频时长
+        if (videoInfo.duration > 3600) { // 3600秒 = 1小时
+            const shouldDownload = await this._askConfirmation(videoInfo.duration, videoInfo.title);
+            if (!shouldDownload) {
+                console.log('已取消下载');
+                return null;
+            }
+        }
+
+        const cid = this._getCid(videoInfo, pageNumber);
         if (!cid) {
             throw new Error('无法获取视频CID');
         }
@@ -76,9 +113,7 @@ class VideoDownloader {
         console.log(`找到视频: ${videoInfo.title}`);
         const videoUrl = await this.api.getVideoUrl(bvid, cid);
 
-        const fileName = this._generateFileName(videoInfo, pageNumber);
         await this.fileManager.ensureDir(targetDir);
-
         const response = await axios({
             method: 'GET',
             url: videoUrl,
@@ -117,6 +152,55 @@ class VideoDownloader {
         }
 
         console.log('\n全部下载完成！保存在文件夹:', dirName);
+    }
+
+    _extractFavInfo(url) {
+        const midMatch = url.match(/space\.bilibili\.com\/(\d+)/);
+        const fidMatch = url.match(/fid=(\d+)/);
+        if (midMatch && fidMatch) {
+            return {
+                mid: midMatch[1],
+                fid: fidMatch[1]
+            };
+        }
+        return null;
+    }
+
+    async downloadFavorites(url) {
+        const favInfo = this._extractFavInfo(url);
+        if (!favInfo) {
+            throw new Error('无效的收藏夹链接');
+        }
+
+        console.log('正在获取收藏夹信息...');
+        const favList = await this.api.getFavList(favInfo.mid, favInfo.fid);
+
+        const dirName = this.fileManager.sanitizeFileName(favList.title);
+        const targetDir = await this.fileManager.ensureDir(dirName);
+
+        console.log(`找到收藏夹: ${favList.title}`);
+        console.log(`共${favList.videos.length}个视频`);
+
+        let skipCount = 0;
+        for (let i = 0; i < favList.videos.length; i++) {
+            const video = favList.videos[i];
+            console.log(`\n[${i + 1}/${favList.videos.length}] 处理: ${video.title}`);
+            try {
+                const videoFilePath = path.join(targetDir, `${this.fileManager.sanitizeFileName(video.title)}.mp4`);
+                if (this.fileManager.fileExists(videoFilePath)) {
+                    console.log(`文件已存在，跳过下载: ${video.title}`);
+                    skipCount++;
+                    continue;
+                }
+                await this.downloadVideo(`https://www.bilibili.com/video/${video.bvid}`, targetDir);
+            } catch (error) {
+                console.error(`下载视频 ${video.title} 失败:`, error.message);
+                continue;
+            }
+        }
+
+        console.log('\n收藏夹下载完成！');
+        console.log(`共${favList.videos.length}个视频，${skipCount}个已存在被跳过，保存在文件夹: ${dirName}`);
     }
 }
 

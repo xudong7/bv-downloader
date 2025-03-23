@@ -55,6 +55,64 @@ class BilibiliAPI {
             episodes: videoInfo.ugc_season.sections[0].episodes
         };
     }
+
+    async getFavList(mid, fid, type = 'created') {
+        try {
+            // 根据收藏夹类型选择不同的API接口
+            const apiUrl = type === 'collected'
+                ? `https://api.bilibili.com/x/v3/fav/folder/collected/list?up_mid=${mid}&platform=web`
+                : `https://api.bilibili.com/x/v3/fav/resource/list?media_id=${fid}&pn=1&ps=1&keyword=&order=mtime&type=0&tid=0&platform=web`;
+
+            const infoResponse = await axios.get(apiUrl);
+            if (infoResponse.data.code !== 0) {
+                throw new Error(infoResponse.data.message);
+            }
+
+            // 处理不同类型收藏夹的数据结构
+            const info = type === 'collected'
+                ? this._findCollectedFavInfo(infoResponse.data.data, fid)
+                : infoResponse.data.data.info;
+
+            if (!info) {
+                throw new Error('未找到收藏夹信息');
+            }
+
+            const totalCount = info.media_count;
+            const pageSize = 20;
+            const totalPages = Math.ceil(totalCount / pageSize);
+
+            console.log(`收藏夹共有 ${totalCount} 个视频，开始获取所有视频信息...`);
+
+            const allVideos = [];
+            for (let page = 1; page <= totalPages; page++) {
+                console.log(`正在获取第 ${page}/${totalPages} 页...`);
+                const response = await axios.get(
+                    `https://api.bilibili.com/x/v3/fav/resource/list?media_id=${fid}&pn=${page}&ps=${pageSize}&keyword=&order=mtime&type=0&tid=0&platform=web`
+                );
+
+                if (response.data.code === 0 && response.data.data.medias) {
+                    allVideos.push(...response.data.data.medias);
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+
+            return {
+                title: info.title,
+                videos: allVideos.map(media => ({
+                    title: media.title,
+                    bvid: media.bvid
+                }))
+            };
+        } catch (error) {
+            throw new Error('获取收藏夹信息失败: ' + error.message);
+        }
+    }
+
+    _findCollectedFavInfo(data, targetFid) {
+        if (!data || !data.list) return null;
+        return data.list.find(item => item.id.toString() === targetFid);
+    }
 }
 
 export default BilibiliAPI;

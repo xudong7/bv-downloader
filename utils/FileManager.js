@@ -12,7 +12,8 @@ class FileManager {
     }
 
     async ensureDir(dirPath) {
-        const fullPath = path.join(this.baseDir, dirPath);
+        // 修改为使用 path.resolve 确保路径正确
+        const fullPath = path.resolve(this.baseDir, dirPath);
         if (!fs.existsSync(fullPath)) {
             fs.mkdirSync(fullPath, { recursive: true });
         }
@@ -27,7 +28,12 @@ class FileManager {
     }
 
     createWriteStream(fileName) {
-        return fs.createWriteStream(path.join(this.baseDir, fileName));
+        // 修改为使用 path.resolve 确保路径正确
+        return fs.createWriteStream(path.resolve(this.baseDir, fileName));
+    }
+
+    fileExists(filePath) {
+        return fs.existsSync(path.resolve(this.baseDir, filePath));
     }
 }
 
