@@ -29,6 +29,12 @@ async function askDownloadDirectory() {
     }
 }
 
+// 添加全局设置询问
+async function askGlobalSettings() {
+    const answer = await askQuestion('是否忽略视频时长检查（超过1小时的视频将直接下载）? (y/n): ');
+    downloader.setIgnoreDuration(answer.toLowerCase() === 'y');
+}
+
 // 处理用户选择
 async function handleUserChoice(url) {
     if (url.includes('space.bilibili.com') && url.includes('favlist')) {
@@ -64,6 +70,7 @@ console.log('请输入B站视频URL或收藏夹URL:');
 rl.on('line', async (url) => {
     if (url.includes('bilibili.com/')) {
         try {
+            await askGlobalSettings();
             await askDownloadDirectory();
             await handleUserChoice(url);
         } catch (error) {

@@ -7,14 +7,17 @@ class VideoDownloader {
     constructor(bilibiliAPI, fileManager) {
         this.api = bilibiliAPI;
         this.fileManager = fileManager;
-        this.rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
+        this.ignoreDuration = false; // 添加时长检查开关
+        this.confirmedCollections = new Set(); // 添加已确认合集的跟踪
     }
 
     setDownloadDir(dir) {
         this.fileManager.setBaseDir(dir);
+        return this;
+    }
+
+    setIgnoreDuration(ignore) {
+        this.ignoreDuration = ignore;
         return this;
     }
 
@@ -73,15 +76,46 @@ class VideoDownloader {
 
         const durationText = `${hours}小时${remainingMinutes}分钟`;
         const answer = await new Promise(resolve => {
-            this.rl.question(
+            // 创建新的readline接口，避免影响主接口
+            const tempRl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+            });
+            
+            tempRl.question(
                 `视频 "${title}" 时长为${durationText}，是否继续下载？(y/n): `,
-                resolve
+                (ans) => {
+                    tempRl.close();
+                    resolve(ans);
+                }
             );
         });
         return answer.toLowerCase() === 'y';
     }
 
-    async downloadVideo(url, targetDir = '.', pageNumber = 1) {
+    async _askCollectionConfirmation(collectionInfo) {
+        const answer = await new Promise(resolve => {
+            const tempRl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+            });
+            
+            tempRl.question(
+                `是否下载合集 "${collectionInfo.title}" 的所有视频？(y/n): `,
+                (ans) => {
+                    tempRl.close();
+                    resolve(ans);
+                }
+            );
+        });
+        if (answer.toLowerCase() === 'y') {
+            // 记录已确认的合集标题
+            this.confirmedCollections.add(collectionInfo.title);
+        }
+        return answer.toLowerCase() === 'y';
+    }
+
+    async downloadVideo(url, targetDir = '.', pageNumber = 1, collectionTitle = null) {
         const bvid = this._extractBvid(url);
         if (!bvid) throw new Error('无效的B站视频链接');
 
@@ -96,12 +130,15 @@ class VideoDownloader {
             return filePath;
         }
 
-        // 检查视频时长
-        if (videoInfo.duration > 3600) { // 3600秒 = 1小时
-            const shouldDownload = await this._askConfirmation(videoInfo.duration, videoInfo.title);
-            if (!shouldDownload) {
-                console.log('已取消下载');
-                return null;
+        // 根据设置决定是否检查视频时长
+        if (!this.ignoreDuration && videoInfo.duration > 3600) { // 3600秒 = 1小时
+            // 如果视频属于已确认的合集，跳过确认
+            if (!collectionTitle || !this.confirmedCollections.has(collectionTitle)) {
+                const shouldDownload = await this._askConfirmation(videoInfo.duration, videoInfo.title);
+                if (!shouldDownload) {
+                    console.log('已取消下载');
+                    return null;
+                }
             }
         }
 
@@ -174,7 +211,7 @@ class VideoDownloader {
 
         console.log('正在获取收藏夹信息...');
         const favList = await this.api.getFavList(favInfo.mid, favInfo.fid);
-
+        
         const dirName = this.fileManager.sanitizeFileName(favList.title);
         const targetDir = await this.fileManager.ensureDir(dirName);
 
@@ -186,13 +223,53 @@ class VideoDownloader {
             const video = favList.videos[i];
             console.log(`\n[${i + 1}/${favList.videos.length}] 处理: ${video.title}`);
             try {
-                const videoFilePath = path.join(targetDir, `${this.fileManager.sanitizeFileName(video.title)}.mp4`);
-                if (this.fileManager.fileExists(videoFilePath)) {
-                    console.log(`文件已存在，跳过下载: ${video.title}`);
-                    skipCount++;
-                    continue;
+                // 先检查是否是分P或合集视频
+                const collectionInfo = await this.api.getCollectionInfo(video.bvid);
+                if (collectionInfo) {
+                    // 为合集创建子目录
+                    const subDirName = this.fileManager.sanitizeFileName(video.title);
+                    const subDir = await this.fileManager.ensureDir(path.join(targetDir, subDirName));
+                    
+                    console.log(`发现${collectionInfo.episodes.length > 1 ? '分P视频' : '合集'}: ${video.title}`);
+                    console.log(`共${collectionInfo.episodes.length}个视频`);
+
+                    // 询问是否下载整个合集
+                    const shouldDownloadAll = await this._askCollectionConfirmation(collectionInfo);
+                    if (!shouldDownloadAll) {
+                        console.log('已跳过此合集');
+                        continue;
+                    }
+
+                    for (let j = 0; j < collectionInfo.episodes.length; j++) {
+                        const episode = collectionInfo.episodes[j];
+                        console.log(`\n  [${j + 1}/${collectionInfo.episodes.length}] 下载: ${episode.title}`);
+                        
+                        if (episode.page) {
+                            await this.downloadVideo(
+                                `https://www.bilibili.com/video/${episode.bvid}`,
+                                subDir,
+                                episode.page,
+                                collectionInfo.title
+                            );
+                        } else {
+                            await this.downloadVideo(
+                                `https://www.bilibili.com/video/${episode.bvid}`,
+                                subDir,
+                                1,
+                                collectionInfo.title
+                            );
+                        }
+                    }
+                } else {
+                    // 单个视频的处理
+                    const videoFilePath = path.join(targetDir, `${this.fileManager.sanitizeFileName(video.title)}.mp4`);
+                    if (this.fileManager.fileExists(videoFilePath)) {
+                        console.log(`文件已存在，跳过下载: ${video.title}`);
+                        skipCount++;
+                        continue;
+                    }
+                    await this.downloadVideo(`https://www.bilibili.com/video/${video.bvid}`, targetDir);
                 }
-                await this.downloadVideo(`https://www.bilibili.com/video/${video.bvid}`, targetDir);
             } catch (error) {
                 console.error(`下载视频 ${video.title} 失败:`, error.message);
                 continue;
