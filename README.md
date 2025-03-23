@@ -12,12 +12,15 @@ A command-line tool for downloading videos from Bilibili using BV numbers or vid
 
 - Download videos via Bilibili video URL or BV number
 - Support for single video or collection download
+- Support for downloading favorite folders (both created and subscribed)
 - Custom download directory selection
 - Batch download for multi-part videos
 - Video metadata fetching and display
 - Real-time progress bar
 - Auto-creation of collection directories
 - Smart filename handling
+- Skip existing files automatically
+- Duration check for long videos
 
 ## Prerequisites
 
@@ -46,13 +49,17 @@ npm start
 
 2. Input video URL:
 - Supports full Bilibili video URLs
-- Example: https://www.bilibili.com/video/BV1xx411c7mD
+- Supports favorite folder URLs
+- Examples: 
+  - Video: https://www.bilibili.com/video/BV1xx411c7mD
+  - Created favorites: https://space.bilibili.com/user/favlist?fid=xxx&ftype=create
+  - Subscribed favorites: https://space.bilibili.com/user/favlist?fid=xxx&ftype=collect
 
-3. Set download directory:
-- Specify a custom download directory
-- Press Enter to use current directory
+3. Configure global settings:
+- Choose whether to skip duration check for long videos
+- Set custom download directory
 
-4. Choose download mode:
+4. Choose download mode (for single video URLs):
 - Option 1: Download single video
 - Option 2: Download entire collection (if available)
 

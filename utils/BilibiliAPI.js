@@ -4,7 +4,8 @@ class BilibiliAPI {
     constructor() {
         this.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Referer': 'https://www.bilibili.com'
+            'Referer': 'https://www.bilibili.com',
+            'Cookie': 'CSRF=placeholder;' // 如果需要，用户可以在这里添加自己的Cookie
         };
     }
 
@@ -58,20 +59,31 @@ class BilibiliAPI {
 
     async getFavList(mid, fid, type = 'created') {
         try {
-            // 根据收藏夹类型选择不同的API接口
-            const apiUrl = type === 'collected'
-                ? `https://api.bilibili.com/x/v3/fav/folder/collected/list?up_mid=${mid}&platform=web`
-                : `https://api.bilibili.com/x/v3/fav/resource/list?media_id=${fid}&pn=1&ps=1&keyword=&order=mtime&type=0&tid=0&platform=web`;
+            let info;
+            let apiUrl;
 
-            const infoResponse = await axios.get(apiUrl);
-            if (infoResponse.data.code !== 0) {
-                throw new Error(infoResponse.data.message);
+            if (type === 'collected') {
+                // 使用新的订阅收藏夹API
+                apiUrl = `https://api.bilibili.com/x/space/fav/season/list?season_id=${fid}&pn=1&ps=20`;
+            } else {
+                apiUrl = `https://api.bilibili.com/x/v3/fav/resource/list?media_id=${fid}&pn=1&ps=20`;
+            }
+
+            const mediaListResponse = await axios.get(apiUrl, { headers: this.headers });
+            
+            if (mediaListResponse.data.code !== 0) {
+                throw new Error(mediaListResponse.data.message || '获取收藏夹失败');
             }
 
             // 处理不同类型收藏夹的数据结构
-            const info = type === 'collected'
-                ? this._findCollectedFavInfo(infoResponse.data.data, fid)
-                : infoResponse.data.data.info;
+            if (type === 'collected') {
+                info = {
+                    title: mediaListResponse.data.data.info.title,
+                    media_count: mediaListResponse.data.data.info.media_count
+                };
+            } else {
+                info = mediaListResponse.data.data.info;
+            }
 
             if (!info) {
                 throw new Error('未找到收藏夹信息');
@@ -80,32 +92,52 @@ class BilibiliAPI {
             const totalCount = info.media_count;
             const pageSize = 20;
             const totalPages = Math.ceil(totalCount / pageSize);
-
+            
             console.log(`收藏夹共有 ${totalCount} 个视频，开始获取所有视频信息...`);
-
+            
             const allVideos = [];
             for (let page = 1; page <= totalPages; page++) {
                 console.log(`正在获取第 ${page}/${totalPages} 页...`);
                 const response = await axios.get(
-                    `https://api.bilibili.com/x/v3/fav/resource/list?media_id=${fid}&pn=${page}&ps=${pageSize}&keyword=&order=mtime&type=0&tid=0&platform=web`
+                    type === 'collected'
+                        ? `https://api.bilibili.com/x/space/fav/season/list?season_id=${fid}&pn=${page}&ps=${pageSize}`
+                        : `https://api.bilibili.com/x/v3/fav/resource/list?media_id=${fid}&pn=${page}&ps=${pageSize}`,
+                    { headers: this.headers }
                 );
+                
+                if (response.data.code === 0) {
+                    const medias = type === 'collected'
+                        ? response.data.data.medias
+                        : response.data.data.medias;
 
-                if (response.data.code === 0 && response.data.data.medias) {
-                    allVideos.push(...response.data.data.medias);
+                    if (medias && medias.length > 0) {
+                        allVideos.push(...medias);
+                    }
                 }
-
+                
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
 
+            if (allVideos.length === 0) {
+                throw new Error('未找到任何视频，请检查收藏夹是否为空或者是否有权限访问');
+            }
+
+            console.log(`成功获取到 ${allVideos.length} 个视频信息`);
+            
             return {
                 title: info.title,
                 videos: allVideos.map(media => ({
-                    title: media.title,
+                    title: media.title || media.name,
                     bvid: media.bvid
                 }))
             };
         } catch (error) {
-            throw new Error('获取收藏夹信息失败: ' + error.message);
+            console.error('API错误详情:', {
+                message: error.message,
+                response: error.response?.data,
+                status: error.response?.status
+            });
+            throw new Error('获取收藏夹信息失败: ' + (error.response?.data?.message || error.message));
         }
     }
 

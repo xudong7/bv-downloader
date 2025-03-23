@@ -194,10 +194,13 @@ class VideoDownloader {
     _extractFavInfo(url) {
         const midMatch = url.match(/space\.bilibili\.com\/(\d+)/);
         const fidMatch = url.match(/fid=(\d+)/);
+        const typeMatch = url.match(/ftype=(\w+)/);
+        
         if (midMatch && fidMatch) {
             return {
                 mid: midMatch[1],
-                fid: fidMatch[1]
+                fid: fidMatch[1],
+                type: typeMatch && typeMatch[1] === 'collect' ? 'collected' : 'created'
             };
         }
         return null;
@@ -210,7 +213,7 @@ class VideoDownloader {
         }
 
         console.log('正在获取收藏夹信息...');
-        const favList = await this.api.getFavList(favInfo.mid, favInfo.fid);
+        const favList = await this.api.getFavList(favInfo.mid, favInfo.fid, favInfo.type);
         
         const dirName = this.fileManager.sanitizeFileName(favList.title);
         const targetDir = await this.fileManager.ensureDir(dirName);
@@ -223,7 +226,19 @@ class VideoDownloader {
             const video = favList.videos[i];
             console.log(`\n[${i + 1}/${favList.videos.length}] 处理: ${video.title}`);
             try {
-                // 先检查是否是分P或合集视频
+                // 对于订阅的收藏夹，直接下载视频，不检查合集
+                if (favInfo.type === 'collected') {
+                    const videoFilePath = path.join(targetDir, `${this.fileManager.sanitizeFileName(video.title)}.mp4`);
+                    if (this.fileManager.fileExists(videoFilePath)) {
+                        console.log(`文件已存在，跳过下载: ${video.title}`);
+                        skipCount++;
+                        continue;
+                    }
+                    await this.downloadVideo(`https://www.bilibili.com/video/${video.bvid}`, targetDir);
+                    continue;
+                }
+
+                // 自建收藏夹的处理逻辑保持不变
                 const collectionInfo = await this.api.getCollectionInfo(video.bvid);
                 if (collectionInfo) {
                     // 为合集创建子目录
