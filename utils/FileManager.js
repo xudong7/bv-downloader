@@ -27,13 +27,22 @@ class FileManager {
             .trim();
     }
 
-    createWriteStream(fileName) {
-        // 修改为使用 path.resolve 确保路径正确
-        return fs.createWriteStream(path.resolve(this.baseDir, fileName));
+    createWriteStream(filePath) {
+        // 检查是否为绝对路径，如果是则直接使用，否则相对于baseDir解析
+        if (path.isAbsolute(filePath)) {
+            return fs.createWriteStream(filePath);
+        } else {
+            return fs.createWriteStream(path.resolve(this.baseDir, filePath));
+        }
     }
 
     fileExists(filePath) {
-        return fs.existsSync(path.resolve(this.baseDir, filePath));
+        // 检查是否为绝对路径，如果是则直接使用，否则相对于baseDir解析
+        if (path.isAbsolute(filePath)) {
+            return fs.existsSync(filePath);
+        } else {
+            return fs.existsSync(path.resolve(this.baseDir, filePath));
+        }
     }
 }
 

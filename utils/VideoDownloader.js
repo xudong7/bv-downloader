@@ -4,9 +4,10 @@ import path from 'path';
 import readline from 'readline';
 
 class VideoDownloader {
-    constructor(bilibiliAPI, fileManager) {
+    constructor(bilibiliAPI, fileManager, uiManager) {
         this.api = bilibiliAPI;
         this.fileManager = fileManager;
+        this.ui = uiManager || null; // 添加UI管理器
         this.ignoreDuration = false; // 添加时长检查开关
         this.confirmedCollections = new Set(); // 添加已确认合集的跟踪
     }
@@ -49,7 +50,9 @@ class VideoDownloader {
             total: parseInt(totalLength)
         });
 
+        // 使用绝对路径确保文件保存在正确的位置
         const filePath = path.resolve(targetDir, fileName);
+        // 直接传递绝对路径给createWriteStream
         const writer = this.fileManager.createWriteStream(filePath);
 
         return new Promise((resolve, reject) => {
@@ -115,14 +118,15 @@ class VideoDownloader {
         return answer.toLowerCase() === 'y';
     }
 
-    async downloadVideo(url, targetDir = '.', pageNumber = 1, collectionTitle = null) {
+    async downloadVideo(url, targetDir = this.fileManager.baseDir || '.', pageNumber = 1, collectionTitle = null) {
         const bvid = this._extractBvid(url);
         if (!bvid) throw new Error('无效的B站视频链接');
 
         console.log('正在获取视频信息...');
         const videoInfo = await this.api.getVideoInfo(bvid);
         const fileName = this._generateFileName(videoInfo, pageNumber);
-        const filePath = path.join(targetDir, fileName);
+        // 使用path.resolve保持与_handleDownload方法一致的路径处理
+        const filePath = path.resolve(targetDir, fileName);
 
         // 检查文件是否已存在
         if (this.fileManager.fileExists(filePath)) {
@@ -212,25 +216,47 @@ class VideoDownloader {
             throw new Error('无效的收藏夹链接');
         }
 
-        console.log('正在获取收藏夹信息...');
+        this.ui.startSpinner('正在获取收藏夹信息...');
         const favList = await this.api.getFavList(favInfo.mid, favInfo.fid, favInfo.type);
+        this.ui.stopSpinnerSuccess('获取收藏夹信息成功');
+        
+        // 显示收藏夹信息
+        this.ui.showFavInfo(favList);
 
         const dirName = this.fileManager.sanitizeFileName(favList.title);
         const targetDir = await this.fileManager.ensureDir(dirName);
+        
+        // 询问是否下载整个收藏夹
+        const answer = await new Promise(resolve => {
+            const tempRl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+            });
 
-        console.log(`找到收藏夹: ${favList.title}`);
-        console.log(`共${favList.videos.length}个视频`);
+            tempRl.question(
+                this.ui.showPrompt(`是否下载收藏夹 "${favList.title}" 的所有视频？(y/n): `),
+                (ans) => {
+                    tempRl.close();
+                    resolve(ans);
+                }
+            );
+        });
+        
+        if (answer.toLowerCase() !== 'y') {
+            this.ui.showInfo('已取消下载收藏夹');
+            return;
+        }
 
         let skipCount = 0;
         for (let i = 0; i < favList.videos.length; i++) {
             const video = favList.videos[i];
-            console.log(`\n[${i + 1}/${favList.videos.length}] 处理: ${video.title}`);
+            this.ui.showInfo(`\n[${i + 1}/${favList.videos.length}] 处理: ${video.title}`);
             try {
                 // 对于订阅的收藏夹，直接下载视频，不检查合集
                 if (favInfo.type === 'collected') {
                     const videoFilePath = path.join(targetDir, `${this.fileManager.sanitizeFileName(video.title)}.mp4`);
                     if (this.fileManager.fileExists(videoFilePath)) {
-                        console.log(`文件已存在，跳过下载: ${video.title}`);
+                        this.ui.showWarning(`文件已存在，跳过下载: ${video.title}`);
                         skipCount++;
                         continue;
                     }
@@ -245,19 +271,19 @@ class VideoDownloader {
                     const subDirName = this.fileManager.sanitizeFileName(video.title);
                     const subDir = await this.fileManager.ensureDir(path.join(targetDir, subDirName));
 
-                    console.log(`发现${collectionInfo.episodes.length > 1 ? '分P视频' : '合集'}: ${video.title}`);
-                    console.log(`共${collectionInfo.episodes.length}个视频`);
+                    this.ui.showInfo(`发现${collectionInfo.episodes.length > 1 ? '分P视频' : '合集'}: ${video.title}`);
+                    this.ui.showInfo(`共${collectionInfo.episodes.length}个视频`);
 
                     // 询问是否下载整个合集
                     const shouldDownloadAll = await this._askCollectionConfirmation(collectionInfo);
                     if (!shouldDownloadAll) {
-                        console.log('已跳过此合集');
+                        this.ui.showInfo('已跳过此合集');
                         continue;
                     }
 
                     for (let j = 0; j < collectionInfo.episodes.length; j++) {
                         const episode = collectionInfo.episodes[j];
-                        console.log(`\n  [${j + 1}/${collectionInfo.episodes.length}] 下载: ${episode.title}`);
+                        this.ui.showInfo(`\n  [${j + 1}/${collectionInfo.episodes.length}] 下载: ${episode.title}`);
 
                         if (episode.page) {
                             await this.downloadVideo(
@@ -279,20 +305,27 @@ class VideoDownloader {
                     // 单个视频的处理
                     const videoFilePath = path.join(targetDir, `${this.fileManager.sanitizeFileName(video.title)}.mp4`);
                     if (this.fileManager.fileExists(videoFilePath)) {
-                        console.log(`文件已存在，跳过下载: ${video.title}`);
+                        this.ui.showWarning(`文件已存在，跳过下载: ${video.title}`);
                         skipCount++;
                         continue;
                     }
                     await this.downloadVideo(`https://www.bilibili.com/video/${video.bvid}`, targetDir);
                 }
             } catch (error) {
-                console.error(`下载视频 ${video.title} 失败:`, error.message);
+                this.ui.showError(`下载视频 ${video.title} 失败: ${error.message}`);
                 continue;
+            }
+            
+            // 添加延迟，避免请求过于频繁
+            if (i < favList.videos.length - 1) {
+                this.ui.startSpinner('等待1秒后继续下一个视频...');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                this.ui.stopSpinnerSuccess('准备下载下一个视频');
             }
         }
 
-        console.log('\n收藏夹下载完成！');
-        console.log(`共${favList.videos.length}个视频，${skipCount}个已存在被跳过，保存在文件夹: ${dirName}`);
+        this.ui.showSuccess('\n收藏夹下载完成！');
+        this.ui.showSuccess(`共${favList.videos.length}个视频，${skipCount}个已存在被跳过，保存在文件夹: ${dirName}`);
     }
 }
 
