@@ -70,23 +70,17 @@ class UIManager {
      * @param {Object} videoInfo 视频信息
      */
     showVideoInfo(videoInfo) {
-        const table = new Table({
-            head: [chalk.cyan('属性'), chalk.cyan('值')],
-            colWidths: [20, 60]
-        });
-
         const duration = this.formatDuration(videoInfo.duration);
-
-        table.push(
-            ['标题', chalk.white(videoInfo.title)],
-            ['UP主', chalk.yellow(videoInfo.owner.name)],
-            ['时长', chalk.green(duration)],
-            ['播放量', chalk.magenta(videoInfo.stat.view.toLocaleString())],
-            ['弹幕数', chalk.blue(videoInfo.stat.danmaku.toLocaleString())],
-            ['发布日期', chalk.gray(new Date(videoInfo.pubdate * 1000).toLocaleDateString())]
-        );
-
-        console.log(table.toString());
+        
+        console.log(chalk.bold.cyan('📺 视频信息'));
+        console.log(chalk.white.bold('┌───────────────────────────────────────┐'));
+        console.log(chalk.white.bold('│ ') + chalk.bold('标题: ') + chalk.white(videoInfo.title));
+        console.log(chalk.white.bold('│ ') + chalk.bold('UP主: ') + chalk.yellow(videoInfo.owner.name));
+        console.log(chalk.white.bold('│ ') + chalk.bold('时长: ') + chalk.green(duration));
+        console.log(chalk.white.bold('│ ') + chalk.bold('播放量: ') + chalk.magenta(videoInfo.stat.view.toLocaleString()));
+        console.log(chalk.white.bold('│ ') + chalk.bold('弹幕数: ') + chalk.blue(videoInfo.stat.danmaku.toLocaleString()));
+        console.log(chalk.white.bold('│ ') + chalk.bold('发布日期: ') + chalk.gray(new Date(videoInfo.pubdate * 1000).toLocaleDateString()));
+        console.log(chalk.white.bold('└───────────────────────────────────────┘'));
     }
 
     /**

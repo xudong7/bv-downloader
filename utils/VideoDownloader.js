@@ -124,6 +124,7 @@ class VideoDownloader {
 
         console.log('正在获取视频信息...');
         const videoInfo = await this.api.getVideoInfo(bvid);
+        this.ui.showVideoInfo(videoInfo);
         const fileName = this._generateFileName(videoInfo, pageNumber);
         // 使用path.resolve保持与_handleDownload方法一致的路径处理
         const filePath = path.resolve(targetDir, fileName);

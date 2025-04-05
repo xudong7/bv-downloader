@@ -8,7 +8,7 @@ import path from 'path';
 const api = new BilibiliAPI();
 const fileManager = new FileManager();
 const ui = new UIManager();
-const downloader = new VideoDownloader(api, fileManager);
+const downloader = new VideoDownloader(api, fileManager, ui);
 
 const rl = readline.createInterface({
     input: process.stdin,
