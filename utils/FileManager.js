@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 class FileManager {
-    constructor(baseDir = '.') {
+    constructor(baseDir = './download') {
         this.baseDir = baseDir;
     }
 

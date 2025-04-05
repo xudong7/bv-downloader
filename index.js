@@ -53,6 +53,7 @@ async function handleUserChoice(url) {
 
     try {
         const choice = await askQuestion(ui.showPrompt('请输入选择 (1 或 2): '));
+        rl.close();
 
         switch (choice.trim()) {
             case '1':
@@ -81,11 +82,9 @@ rl.on('line', async (url) => {
             await handleUserChoice(url);
         } catch (error) {
             ui.showError(`处理失败: ${error.message}`);
-        } finally {
-            rl.close();
         }
     } else {
-        ui.showError('请输入有效的B站视频URL');
+        ui.showError('无效的URL，请输入有效的B站视频或收藏夹链接。');
         rl.close();
     }
 });

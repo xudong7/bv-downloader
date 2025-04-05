@@ -118,7 +118,7 @@ class VideoDownloader {
         return answer.toLowerCase() === 'y';
     }
 
-    async downloadVideo(url, targetDir = this.fileManager.baseDir || '.', pageNumber = 1, collectionTitle = null) {
+    async downloadVideo(url, targetDir = this.fileManager.baseDir, pageNumber = 1, collectionTitle = null) {
         const bvid = this._extractBvid(url);
         if (!bvid) throw new Error('无效的B站视频链接');
 
